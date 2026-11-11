@@ -12,6 +12,7 @@ import cz.upce.fei.nnptp.taskpulse.storage.InMemoryTaskRepository;
 import cz.upce.fei.nnptp.taskpulse.storage.ProjectRepository;
 import cz.upce.fei.nnptp.taskpulse.storage.TaskRepository;
 import cz.upce.fei.nnptp.taskpulse.storage.csv.CsvStorageManager;
+import cz.upce.fei.nnptp.taskpulse.storage.csv.WorkspaceBackup;
 
 import java.io.PrintStream;
 import java.nio.file.Path;
@@ -40,7 +41,9 @@ public class TaskPulseApp {
             return;
         }
 
-        TaskPulseCli cli = new TaskPulseCli(projectService, taskService);
+        TaskPulseCli cli = new TaskPulseCli(projectService, taskService,
+                new WorkspaceBackup(projectRepository, taskRepository),
+                System.out, System.err);
         if (args.length > 0) {
             cli.executeTokens(List.of(args));
             storageManager.save(projectRepository, taskRepository);

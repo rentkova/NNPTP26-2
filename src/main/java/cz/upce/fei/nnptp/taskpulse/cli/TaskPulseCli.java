@@ -9,8 +9,10 @@ import cz.upce.fei.nnptp.taskpulse.service.ProjectService;
 import cz.upce.fei.nnptp.taskpulse.service.TaskQuery;
 import cz.upce.fei.nnptp.taskpulse.service.TaskService;
 import cz.upce.fei.nnptp.taskpulse.service.TaskSortOrder;
+import cz.upce.fei.nnptp.taskpulse.storage.csv.WorkspaceBackup;
 
 import java.io.PrintStream;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
@@ -21,6 +23,7 @@ import java.util.Scanner;
 import java.util.UUID;
 
 public class TaskPulseCli {
+    private WorkspaceBackup workspaceBackup;
     private final ProjectService projectService;
     private final TaskService taskService;
     private final PrintStream out;
@@ -37,6 +40,30 @@ public class TaskPulseCli {
 
     public TaskPulseCli(ProjectService projectService, TaskService taskService) {
         this(projectService, taskService, System.out, System.err);
+    }
+
+    public TaskPulseCli(ProjectService projects, TaskService tasks,
+                        WorkspaceBackup backup,
+                        PrintStream out, PrintStream err) {
+        this(projects, tasks, out, err);
+        this.workspaceBackup = Objects.requireNonNull(backup);
+    }
+
+    private void handleWorkspaceCommand(List<String> args) {
+        if (args.size() != 2 || (!args.get(0).equals("export") && !args.get(0).equals("import"))) {
+            throw new IllegalArgumentException("Usage: workspace <export|import> <path>");
+        }
+        if (workspaceBackup == null) {
+            throw new IllegalArgumentException("Workspace backup is not configured");
+        }
+        Path path = Path.of(args.get(1));
+        if (args.get(0).equals("export")) {
+            workspaceBackup.exportArchive(path);
+            out.println("Workspace exported: " + path);
+        } else {
+            workspaceBackup.importBundle(path);
+            out.println("Workspace imported: " + path);
+        }
     }
 
     public void runInteractive(Scanner scanner) {
@@ -75,6 +102,7 @@ public class TaskPulseCli {
         try {
             switch (command) {
                 case "help" -> printHelp();
+                case "workspace" -> handleWorkspaceCommand(tokens.subList(1, tokens.size()));
                 case "project" -> handleProjectCommand(tokens.subList(1, tokens.size()));
                 case "task" -> handleTaskCommand(tokens.subList(1, tokens.size()));
                 case "worklog" -> handleWorklogCommand(tokens.subList(1, tokens.size()));
@@ -104,6 +132,8 @@ public class TaskPulseCli {
         out.println("  task delete <task-id>");
         out.println("  worklog log <task-id> <durationMinutes> --author <author> [--desc <description>]");
         out.println("  worklog list <task-id>");
+        out.println("  workspace export <archive.zip>");
+        out.println("  workspace import <archive.zip|csv-directory> (replaces current workspace)");
         out.println("  exit / quit");
     }
 
