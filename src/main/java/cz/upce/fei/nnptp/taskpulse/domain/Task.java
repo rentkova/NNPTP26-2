@@ -73,10 +73,20 @@ public class Task {
     }
 
     public void setTitle(String title) {
+        validateTitle(title);
+        this.title = title.strip();
+    }
+
+    public static void validateTitle(String title) {
         if (title == null || title.isBlank()) {
             throw new ValidationException("Task title must not be blank");
         }
-        this.title = title.strip();
+    }
+
+    public static void validateEstimatedMinutes(Integer estimatedMinutes) {
+        if (estimatedMinutes != null && estimatedMinutes < 0) {
+            throw new ValidationException("Estimated minutes cannot be negative, got: " + estimatedMinutes);
+        }
     }
 
     public String getDescription() {
@@ -104,9 +114,7 @@ public class Task {
     }
 
     public void setEstimatedMinutes(Integer estimatedMinutes) {
-        if (estimatedMinutes != null && estimatedMinutes < 0) {
-            throw new ValidationException("Estimated minutes cannot be negative, got: " + estimatedMinutes);
-        }
+        validateEstimatedMinutes(estimatedMinutes);
         this.estimatedMinutes = estimatedMinutes;
     }
 

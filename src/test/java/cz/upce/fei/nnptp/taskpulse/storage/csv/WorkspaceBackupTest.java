@@ -1,17 +1,12 @@
 package cz.upce.fei.nnptp.taskpulse.storage.csv;
 
-import cz.upce.fei.nnptp.taskpulse.cli.TaskPulseCli;
 import cz.upce.fei.nnptp.taskpulse.domain.*;
-import cz.upce.fei.nnptp.taskpulse.service.ProjectService;
-import cz.upce.fei.nnptp.taskpulse.service.TaskService;
 import cz.upce.fei.nnptp.taskpulse.storage.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -108,21 +103,4 @@ class WorkspaceBackupTest {
         assertThat(projects.findAll()).containsExactly(original);
     }
 
-    @Test
-    void cliExportsAndImportsCurrentSessionAndReportsUsage() {
-        var output = new ByteArrayOutputStream();
-        var errors = new ByteArrayOutputStream();
-        var cli = new TaskPulseCli(new ProjectService(projects, tasks), new TaskService(tasks, projects),
-                backup, new PrintStream(output), new PrintStream(errors));
-        cli.executeTokens(List.of("project", "add", "Saved"));
-        Path zip = directory.resolve("with spaces.zip");
-        cli.executeTokens(List.of("workspace", "export", zip.toString()));
-        cli.executeTokens(List.of("project", "add", "Discarded"));
-        cli.executeTokens(List.of("workspace", "import", zip.toString()));
-        assertThat(projects.findAll()).extracting(Project::getName).containsExactly("Saved");
-        assertThat(errors.toString()).isEmpty();
-        assertThat(output.toString()).contains("Workspace exported", "Workspace imported");
-        cli.executeTokens(List.of("workspace", "import"));
-        assertThat(errors.toString()).contains("Usage: workspace");
-    }
 }

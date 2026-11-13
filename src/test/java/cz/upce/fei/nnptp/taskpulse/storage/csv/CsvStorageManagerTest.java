@@ -1,10 +1,12 @@
 package cz.upce.fei.nnptp.taskpulse.storage.csv;
 
+import cz.upce.fei.nnptp.taskpulse.domain.Label;
 import cz.upce.fei.nnptp.taskpulse.domain.Priority;
 import cz.upce.fei.nnptp.taskpulse.domain.Project;
 import cz.upce.fei.nnptp.taskpulse.domain.Task;
 import cz.upce.fei.nnptp.taskpulse.domain.TaskState;
 import cz.upce.fei.nnptp.taskpulse.domain.Worklog;
+import cz.upce.fei.nnptp.taskpulse.domain.exception.ValidationException;
 import cz.upce.fei.nnptp.taskpulse.storage.InMemoryProjectRepository;
 import cz.upce.fei.nnptp.taskpulse.storage.InMemoryTaskRepository;
 import cz.upce.fei.nnptp.taskpulse.storage.StorageException;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CsvStorageManagerTest {
@@ -108,7 +111,63 @@ class CsvStorageManagerTest {
                 .isInstanceOf(StorageException.class)
                 .hasMessageContaining("missing project");
     }
-    
+
+    @Test
+    void rejectDuplicateTaskIdInCsv() throws IOException {
+        UUID projectId = UUID.randomUUID();
+        UUID taskId = UUID.randomUUID();
+        Files.writeString(tempDir.resolve("projects.csv"),
+                "id,name,description\n" + projectId + ",Project,\n");
+        Files.writeString(tempDir.resolve("tasks.csv"),
+                "id,projectId,title,description,priority,state,estimatedMinutes,dueDate,labels\n" +
+                taskId + "," + projectId + ",First,,MEDIUM,TODO,,,\n" +
+                taskId + "," + projectId + ",Second,,MEDIUM,TODO,,,\n");
+
+        CsvStorageManager storage = new CsvStorageManager(tempDir);
+        assertThatThrownBy(storage::load)
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("Duplicate task id");
+    }
+
+    @Test
+    void rejectWorklogReferencingMissingTask() throws IOException {
+        UUID missingTaskId = UUID.randomUUID();
+        Files.writeString(tempDir.resolve("worklogs.csv"),
+                "taskId,timestamp,durationMinutes,author,description\n" +
+                missingTaskId + ",2026-10-21T14:30,30,Petr,\n");
+
+        CsvStorageManager storage = new CsvStorageManager(tempDir);
+        assertThatThrownBy(storage::load)
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("missing task")
+                .hasMessageContaining(missingTaskId.toString());
+    }
+
+    @Test
+    void skipBlankLinesBetweenRows() throws IOException {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        Files.writeString(tempDir.resolve("projects.csv"),
+                "id,name,description\n" + first + ",First,\n\n" + second + ",Second,\n");
+
+        CsvStorageManager.LoadedWorkspace workspace = new CsvStorageManager(tempDir).load();
+
+        assertThat(workspace.projectRepository().findAll())
+                .extracting(Project::getId)
+                .containsExactlyInAnyOrder(first, second);
+    }
+
+    @Test
+    void rejectRowWithMissingColumns() throws IOException {
+        Files.writeString(tempDir.resolve("projects.csv"),
+                "id,name,description\n" + UUID.randomUUID() + ",Only name\n");
+
+        CsvStorageManager storage = new CsvStorageManager(tempDir);
+        assertThatThrownBy(storage::load)
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("Malformed row in projects.csv at line 2");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {";", ";;", " ; ", "backend;;frontend", "backend;", ";backend", "   "})
     void rejectEmptyLabelEdgeCasesInCsv(String invalidLabels) throws IOException {
@@ -144,6 +203,28 @@ class CsvStorageManagerTest {
 
         Task loadedTask = workspace.taskRepository().findById(taskId).orElseThrow();
         assertThat(loadedTask.getLabels()).isEmpty();
+    }
+
+    @Test
+    void labelContainingSeparatorNeverReachesWorkspaceFile() {
+        CsvStorageManager storage = new CsvStorageManager(tempDir);
+        InMemoryProjectRepository projectRepo = new InMemoryProjectRepository();
+        InMemoryTaskRepository taskRepo = new InMemoryTaskRepository();
+
+        Project project = new Project("Projekt", "Popis");
+        projectRepo.save(project);
+        Task task = new Task(project.getId(), "Úkol");
+        task.addLabel("urgent");
+        taskRepo.save(task);
+
+        assertThatThrownBy(() -> task.addLabel("release" + Label.SEPARATOR))
+                .isInstanceOf(ValidationException.class);
+
+        storage.save(projectRepo, taskRepo);
+
+        assertThatCode(storage::load).doesNotThrowAnyException();
+        Task reloaded = storage.load().taskRepository().findById(task.getId()).orElseThrow();
+        assertThat(reloaded.getLabels()).containsExactly("urgent");
     }
 
     @Test

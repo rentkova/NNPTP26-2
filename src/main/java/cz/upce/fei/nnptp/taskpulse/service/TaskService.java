@@ -66,6 +66,9 @@ public class TaskService {
     public Task updateTask(UUID id, String title, String description, Priority priority,
                            Integer estimatedMinutes, LocalDate dueDate) {
         Task task = getTask(id);
+        Task.validateTitle(title);
+        Task.validateEstimatedMinutes(estimatedMinutes);
+        Objects.requireNonNull(priority, "Priority must not be null");
         task.setTitle(title);
         task.setDescription(description);
         task.setPriority(priority);

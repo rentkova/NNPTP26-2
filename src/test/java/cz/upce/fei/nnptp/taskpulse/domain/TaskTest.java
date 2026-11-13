@@ -95,6 +95,17 @@ class TaskTest {
                 .isInstanceOf(ValidationException.class);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"backend;frontend", "urgent;", ";urgent", ";", "a;;b"})
+    void rejectLabelContainingSeparator(String invalidLabel) {
+        UUID projectId = UUID.randomUUID();
+        Task task = new Task(projectId, "Title");
+
+        assertThatThrownBy(() -> task.addLabel(invalidLabel))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining(Label.SEPARATOR);
+    }
+
     @Test
     void overdueCalculation() {
         UUID projectId = UUID.randomUUID();

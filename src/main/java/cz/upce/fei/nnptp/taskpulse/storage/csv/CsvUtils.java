@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public final class CsvUtils {
     private CsvUtils() {
@@ -21,6 +22,12 @@ public final class CsvUtils {
             return value;
         }
         return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+
+    public static String formatRow(List<String> fields) {
+        return fields.stream()
+                .map(CsvUtils::escape)
+                .collect(Collectors.joining(","));
     }
 
     public static List<List<String>> parse(Reader reader) throws IOException {

@@ -43,6 +43,58 @@ class TaskServiceTest {
     }
 
     @Test
+    void rejectNegativeEstimateWithoutChangingExistingTask() {
+        Project project = projectService.createProject("Dev", "");
+        LocalDate originalDate = LocalDate.of(2026, 11, 20);
+        Task task = taskService.createTask(project.getId(), "Original", "Description", Priority.HIGH, 30, originalDate);
+
+        assertThatThrownBy(() -> taskService.updateTask(task.getId(), "Changed", "Changed description",
+                Priority.LOW, -1, originalDate.plusDays(1)))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("Estimated minutes cannot be negative");
+
+        assertThat(taskService.getTask(task.getId())).satisfies(saved -> {
+            assertThat(saved.getTitle()).isEqualTo("Original");
+            assertThat(saved.getDescription()).isEqualTo("Description");
+            assertThat(saved.getPriority()).isEqualTo(Priority.HIGH);
+            assertThat(saved.getEstimatedMinutes()).isEqualTo(30);
+            assertThat(saved.getDueDate()).isEqualTo(originalDate);
+        });
+    }
+
+    @Test
+    void rejectBlankTitleWithoutChangingExistingTask() {
+        Project project = projectService.createProject("Dev", "");
+        Task task = taskService.createTask(project.getId(), "Original", "Description", Priority.HIGH, 30, null);
+
+        for (String invalidTitle : new String[]{null, "", "  \t  "}) {
+            assertThatThrownBy(() -> taskService.updateTask(task.getId(), invalidTitle,
+                    "Changed", Priority.LOW, 60, null))
+                    .isInstanceOf(ValidationException.class)
+                    .hasMessageContaining("Task title must not be blank");
+            assertThat(taskService.getTask(task.getId()).getTitle()).isEqualTo("Original");
+            assertThat(taskService.getTask(task.getId()).getDescription()).isEqualTo("Description");
+            assertThat(taskService.getTask(task.getId()).getPriority()).isEqualTo(Priority.HIGH);
+            assertThat(taskService.getTask(task.getId()).getEstimatedMinutes()).isEqualTo(30);
+        }
+    }
+
+    @Test
+    void updateTaskWithValidValues() {
+        Project project = projectService.createProject("Dev", "");
+        Task task = taskService.createTask(project.getId(), "Original", "Description", Priority.HIGH, 30, null);
+        LocalDate newDate = LocalDate.of(2026, 12, 1);
+
+        Task updated = taskService.updateTask(task.getId(), " Updated ", "New description", Priority.LOW, 0, newDate);
+
+        assertThat(updated.getTitle()).isEqualTo("Updated");
+        assertThat(updated.getDescription()).isEqualTo("New description");
+        assertThat(updated.getPriority()).isEqualTo(Priority.LOW);
+        assertThat(updated.getEstimatedMinutes()).isZero();
+        assertThat(updated.getDueDate()).isEqualTo(newDate);
+    }
+    
+    @Test
     void createTaskWithValidProject() {
         Project project = projectService.createProject("Dev", "Dev project");
         Task task = taskService.createTask(project.getId(), "Task 1", "Desc 1", Priority.HIGH, 60, LocalDate.of(2026, 10, 25));
